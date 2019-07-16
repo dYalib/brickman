@@ -58,9 +58,11 @@ namespace BrickManager {
                     var file = represented_object as File;
                     var file_info = file.query_info (file_attrs,
                         FileQueryInfoFlags.NOFOLLOW_SYMLINKS);
-                    var mode = file_info.get_attribute_uint32 (FileAttribute.UNIX_MODE);
-                    if (file_info.get_file_type () == FileType.DIRECTORY) {
-                        // if the selected file is a directory, then we
+                    var mode = file_info.get_attribute_uint32 (FileAttribute.UNIX_MODE);     
+		 
+
+		if (file_info.get_file_type () == FileType.DIRECTORY) {
+    					// if the selected file is a directory, then we
                         // open that directory.
                         set_directory.begin (file, (obj, res) => {
                             try {
@@ -70,24 +72,60 @@ namespace BrickManager {
                                 dialog.show ();
                             }
                         });
-                    } else if ((mode & Posix.S_IXUSR) == Posix.S_IXUSR) {
-                        // If the selected file is executable then we run the
+                    } 
+
+
+			else if (((mode & Posix.S_IXUSR) == Posix.S_IXUSR) || (file.get_path().substring(file.get_path().length -3,3) == ".pl")) {
+                        // If the selected file is executable or a prolog file (extension is "pl") then we run the
                         // file via brickrun as USER_NAME. brickrun takes
                         // care of switching consoles, stopping motors, etc.
                         try {
-                            string[] args = {
-                                "/usr/bin/sudo",
-                                "--login",
-                                "--non-interactive",
-                                "--user",
-                                USER_NAME,
-                                "--",
-                                "/usr/bin/brickrun",
-                                "--directory",
-                                file.get_parent().get_path (),
-                                "--",
-                                file.get_path ()
-                            };
+			    string[] args = new string[11];
+				//prolog files needs other brickman parameter then executable files
+			    if (file.get_path().substring(file.get_path().length -3,3) == ".pl") {  
+        			var regex = new Regex ("^\\S+\\s:-");
+					
+					// Open file for reading and wrap returned FileInputStream into a
+        			// DataInputStream, so we can read line by line
+        			var dis = new DataInputStream (file.read ());
+        			string line;
+        			// Read lines until end of file (null) is reached
+        			while (!regex.match (line = dis.read_line (null))) {}
+				args.resize(15);
+				args = {
+                                	"/usr/bin/sudo",
+                                	"--login",
+                                	"--non-interactive",
+                                	"--user",
+                               		USER_NAME,
+                                	"--",
+                                	"/usr/bin/brickrun",
+                                	"--directory",
+                                	file.get_parent().get_path (),
+                                	"--",
+                                	"/usr/bin/swipl",
+									"-t",
+									//prolog file will execute with the first goal (" :-") that is found in the file									
+									line.substring(0, line.index_of (" :-",0)),
+									"-s",
+									file.get_path ()
+			     		};
+			     } 
+			     else {
+				 args = {
+                                	"/usr/bin/sudo",
+                                	"--login",
+                                	"--non-interactive",
+                                	"--user",
+                               		USER_NAME,
+                                	"--",
+                                	"/usr/bin/brickrun",
+                                	"--directory",
+                                	file.get_parent().get_path (),
+                                	"--",
+                                	file.get_path ()
+			     };
+                         };
                             var subproc = new Subprocess.newv (args, SubprocessFlags.STDERR_PIPE);
                             try {
                                 var err_log_filename = file.get_path () + ".err.log";
@@ -215,3 +253,4 @@ namespace BrickManager {
         }
     }
 }
+
